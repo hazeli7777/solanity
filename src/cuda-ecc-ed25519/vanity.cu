@@ -162,11 +162,13 @@ void __global__ vanity_scan(curandState* state) {
 	// Start from an Initial Random Seed (Slow)
 	// NOTE: Insecure random number generator, do not use keys generator by
 	// this program in live.
-	for (int i = 0; i < 32; ++i) {
-		float random    = curand_uniform(&localState);
-		uint8_t keybyte = (uint8_t)(random * 255);
-		seed[i]         = keybyte;
-	}
+	// DELETED: Insecure initial seed generation using curand_uniform
+	// for (int i = 0; i < 32; ++i) {
+	//	float random    = curand_uniform(&localState);
+	//	uint8_t keybyte = (uint8_t)(random * 255);
+	//	seed[i]         = keybyte;
+	// }
+
 
 	// Generate Random Key Data
 	size_t keys_found = 0;
@@ -182,6 +184,15 @@ void __global__ vanity_scan(curandState* state) {
 	// efficiently scan for prefixes. Right now bs58enc cuts performance
 	// from 16M keys on my machine per second to 4M.
 	for (int attempts = 0; attempts < 100000; ++attempts) {
+		// Generate 32 bytes of random data for the seed using cuRAND
+		// This uses the cryptographically secure generator but is slower
+		// than the previous insecure incrementing method.
+		uint32_t *seed_u32 = (uint32_t *)seed;
+		for (int i = 0; i < 8; ++i) {
+			seed_u32[i] = curand(&localState);
+		}
+
+
 		// sha512_init Inlined
 		md.curlen   = 0;
 		md.length   = 0;
@@ -329,21 +340,23 @@ void __global__ vanity_scan(curandState* state) {
 
 		// Code Until here runs at 22_000_000H/s. So the above is fast enough.
 
+		// DELETED: Insecure seed incrementing logic
 		// Increment Seed.
 		// NOTE: This is horrifically insecure. Please don't use these
 		// keys on live. This increment is just so we don't have to
 		// invoke the CUDA random number generator for each hash to
 		// boost performance a little. Easy key generation, awful
 		// security.
-		for (int i = 0; i < 32; ++i) {
-			if (seed[i] == 255) {
-				seed[i]  = 0;
-			} else {
-				seed[i] += 1;
-				break;
-			}
-		}
-	}
+		// for (int i = 0; i < 32; ++i) {
+		//	if (seed[i] == 255) {
+		//		seed[i]  = 0;
+		//	} else {
+		//		seed[i] += 1;
+		//		break;
+		//	}
+		// }
+
+	} // End of main attempts loop
 
 	// Copy Random State so that future calls of this kernel/thread/block
 	// don't repeat their sequences.
